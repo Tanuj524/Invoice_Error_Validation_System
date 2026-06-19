@@ -8,4 +8,4 @@ class Settings(BaseSettings):
     
 
 settings=Settings()
-print(settings.SQLALCHEMY_DATABASE_URL)
+

@@ -1,7 +1,6 @@
 from fastapi import FastAPI, Response, status, HTTPException, Depends, APIRouter
 from sqlalchemy.orm import Session
 from ..db import get_db
-from ..schemas import InvoiceCreate
 from ..models import Invoice,InvoiceItem
 
 router=APIRouter(
