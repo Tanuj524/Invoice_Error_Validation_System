@@ -21,7 +21,9 @@ from .db import Base
 class InvoiceStatus(str, enum.Enum):
     VALID = "VALID"           
     FLAGGED = "FLAGGED"  
-    PENDING = "PENDING"      
+    PENDING = "PENDING"  
+    PROCESSING = "PROCESSING"
+    
 
 
 class SourceFormat(str, enum.Enum):
