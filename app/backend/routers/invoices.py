@@ -41,8 +41,6 @@ def create_invoice(payload: schemas.InvoiceIn, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(invoice)
 
-    # run validation synchronously since there's no file parsing to wait on —
-    # this is pure arithmetic/date checks against data already in memory
     errors = validate_invoice(invoice)
     db.add_all(errors)
     invoice.status = InvoiceStatus.FLAGGED if errors else InvoiceStatus.VALID
@@ -65,12 +63,16 @@ def list_invoices(
         query = query.where(Invoice.status == status)
     return db.execute(query.offset(skip).limit(limit)).scalars().all()
 
+
+
 @router.get("/{invoice_id}/items", response_model=list[schemas.InvoiceItemOut])
 def get_invoice_items(invoice_id: int, db: Session = Depends(get_db)):
     invoice = db.get(Invoice, invoice_id)
     if not invoice:
         raise HTTPException(404, "Invoice not found")
     return invoice.items
+
+
 
 @router.get("/{invoice_id}/errors", response_model=list[schemas.ValidationErrorOut])
 def get_invoice_errors(invoice_id: int, db: Session = Depends(get_db)):
@@ -80,6 +82,8 @@ def get_invoice_errors(invoice_id: int, db: Session = Depends(get_db)):
     return invoice.errors
 
 
+
+
 @router.delete("/{invoice_id}", status_code=204)
 def delete_invoice(invoice_id: int, db: Session = Depends(get_db)):
     invoice = db.get(Invoice, invoice_id)
@@ -87,4 +91,14 @@ def delete_invoice(invoice_id: int, db: Session = Depends(get_db)):
         raise HTTPException(404, "Invoice not found")
     db.delete(invoice)
     db.commit()
+
+
+@router.get("/number/{invoice_number}", response_model=schemas.InvoiceOut)
+def get_invoice_by_number(invoice_number: str, db: Session = Depends(get_db)):
+    invoice = db.execute(
+        select(Invoice).where(Invoice.invoice_number == invoice_number)
+    ).scalar_one_or_none()
+    if not invoice:
+        raise HTTPException(404, f"Invoice {invoice_number} not found")
+    return invoice
 
