@@ -5,6 +5,9 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env")
 
     SQLALCHEMY_DATABASE_URL:str
+    JWT_SECRET:str
+    ALGORITHM:str
+    ACCESS_TOKEN_EXPIRE_MINUTES:int
     
 
 settings=Settings()

@@ -12,10 +12,15 @@ from sqlalchemy import (
     Enum as SAEnum,
 )
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql.sqltypes import TIMESTAMP
+from sqlalchemy.sql.sqltypes import TIMESTAMP,Boolean
 from sqlalchemy.sql.expression import text
 
 from .db import Base
+
+
+class UserRole(str, enum.Enum):
+    ADMIN = "ADMIN"
+    USER = "USER"
 
 
 class InvoiceStatus(str, enum.Enum):
@@ -161,4 +166,21 @@ class ValidationError(Base):
             "(level = 'INVOICE' AND invoice_item_id IS NULL)",
             name="ck_validation_error_level_consistency"
         ),
+    )
+
+
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(100), nullable=False, unique=True, index=True)
+    email = Column(String(255), nullable=False, unique=True, index=True)
+    hashed_password = Column(String(255), nullable=False)
+    role = Column(SAEnum(UserRole, name="user_role"), nullable=False, default=UserRole.USER)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(
+        TIMESTAMP(timezone=True), nullable=False,
+        server_default=text("now()")
     )
