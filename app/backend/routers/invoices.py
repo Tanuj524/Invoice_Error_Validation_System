@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Response, status, HTTPException, Depends, APIRouter
+from fastapi import HTTPException, Depends, APIRouter,Query
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 from typing import Optional
@@ -53,23 +53,38 @@ def create_invoice(payload: schemas.InvoiceIn, db: Session = Depends(get_db)):
     
 
 
-@router.get("/")
-def get_invoices():
-    pass
+@router.get("/", response_model=list[schemas.InvoiceOut])
+def list_invoices(
+    status: Optional[InvoiceStatus] = Query(None),
+    skip: int = 0,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+):
+    query = select(Invoice)
+    if status:
+        query = query.where(Invoice.status == status)
+    return db.execute(query.offset(skip).limit(limit)).scalars().all()
 
-@router.get("/invalid")
-def get_invalid_invoices():
-    pass
+@router.get("/{invoice_id}/items", response_model=list[schemas.InvoiceItemOut])
+def get_invoice_items(invoice_id: int, db: Session = Depends(get_db)):
+    invoice = db.get(Invoice, invoice_id)
+    if not invoice:
+        raise HTTPException(404, "Invoice not found")
+    return invoice.items
 
-@router.get("/{invoice_id}")
-def get_invoice(invoice_id: int):
-    pass
+@router.get("/{invoice_id}/errors", response_model=list[schemas.ValidationErrorOut])
+def get_invoice_errors(invoice_id: int, db: Session = Depends(get_db)):
+    invoice = db.get(Invoice, invoice_id)
+    if not invoice:
+        raise HTTPException(404, "Invoice not found")
+    return invoice.errors
 
-@router.get("/{invoice_id}/items")
-def get_invoice_items(invoice_id: int):
-    pass
 
-@router.get("/{invoice_id}/errors")
-def get_invoice_errors(invoice_id: int):
-    pass
+@router.delete("/{invoice_id}", status_code=204)
+def delete_invoice(invoice_id: int, db: Session = Depends(get_db)):
+    invoice = db.get(Invoice, invoice_id)
+    if not invoice:
+        raise HTTPException(404, "Invoice not found")
+    db.delete(invoice)
+    db.commit()
 
