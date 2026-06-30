@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import invoices
+from .routers import invoices,auth
 from .db import Base,engine
 from . import models
 app = FastAPI()
@@ -18,6 +18,7 @@ app.add_middleware(
     )
 
 app.include_router(invoices.router)
+app.include_router(auth.router)
 
 @app.get("/")
 def root():

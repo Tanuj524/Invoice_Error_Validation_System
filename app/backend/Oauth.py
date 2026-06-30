@@ -22,6 +22,17 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 
 
+def hash_password(password: str) -> str:
+    return pwd_context.hash(password)
+
+
+def verify_password(plain: str, hashed: str) -> bool:
+    return pwd_context.verify(plain, hashed)
+
+
+
+
+
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     to_encode = data.copy()
     expire = datetime.now(timezone.utc) + (expires_delta or timedelta(hours=ACCESS_TOKEN_EXPIRE_MINUTES))
@@ -39,7 +50,7 @@ def decode_token(token: str) -> str:
     )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
+        username: str = payload.get("user_id")
         if username is None:
             raise credentials_exception
     except JWTError:
@@ -55,7 +66,7 @@ def get_current_user(
     username = decode_token(token)
 
     user = db.execute(
-        select(User).where(User.username == username)
+        select(User).where(User.id == username)
     ).scalar_one_or_none()
 
     if user is None or not user.is_active:

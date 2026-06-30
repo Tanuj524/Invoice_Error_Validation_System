@@ -4,7 +4,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
-from .models import SourceFormat, InvoiceStatus, ErrorLevel, ErrorCategory
+from .models import SourceFormat, InvoiceStatus, ErrorLevel, ErrorCategory, UserRole
 
 
 # ---------------------------------------------------------------------------
@@ -90,3 +90,20 @@ class InvoiceOut(BaseModel):
 class InvoiceDetailOut(InvoiceOut):
     items: list[InvoiceItemOut] = []
     errors: list[ValidationErrorOut] = []
+
+
+class UserIn(BaseModel):
+    username: str
+    email: str
+    password: str  # plain text — gets hashed in the router
+
+
+class UserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    username: str
+    email: str
+    role: UserRole
+    is_active: bool
+    created_at: datetime
