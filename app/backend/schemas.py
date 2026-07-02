@@ -33,12 +33,11 @@ class InvoiceIn(BaseModel):
     sgst_total: Optional[Decimal] = None
     cgst_total: Optional[Decimal] = None
     grand_total: Optional[Decimal] = None
+    created_by: int = None
     items: list[InvoiceItemIn] = []
 
 
-# ---------------------------------------------------------------------------
-# Output schemas (backend -> frontend)
-# ---------------------------------------------------------------------------
+
 
 class ValidationErrorOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -84,6 +83,7 @@ class InvoiceOut(BaseModel):
     cgst_total: Optional[Decimal] = None
     grand_total: Optional[Decimal] = None
     status: InvoiceStatus
+    created_by: int = None
     created_at: datetime
 
 
@@ -107,3 +107,9 @@ class UserOut(BaseModel):
     role: UserRole
     is_active: bool
     created_at: datetime
+
+class UpdateUserRole(BaseModel):
+    role: UserRole
+
+class UpdateUserStatus(BaseModel):
+    is_active: bool

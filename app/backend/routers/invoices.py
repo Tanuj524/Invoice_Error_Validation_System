@@ -7,7 +7,7 @@ from .. import schemas
 from ..validation import validate_invoice
 from ..models import Invoice,InvoiceItem,InvoiceStatus
 from ..Oauth import require_admin, require_user, get_current_user
-from ..models import User
+from ..models import User,UserRole
 
 
 
@@ -37,7 +37,7 @@ def create_invoice(payload: schemas.InvoiceIn, db: Session = Depends(get_db), cu
         cgst_total=payload.cgst_total,
         grand_total=payload.grand_total,
         status=InvoiceStatus.PROCESSING,
-        
+        created_by=current_user.id
     )
     invoice.items = [
         InvoiceItem(**item.model_dump()) for item in payload.items
@@ -66,8 +66,16 @@ def list_invoices(
     current_user: User = Depends(require_user)
 ):
     query = select(Invoice)
+
+    # admins see all invoices, users only see their own
+    if current_user.role == UserRole.ADMIN:
+        pass
+    else:
+        query = query.where(Invoice.created_by == current_user.id)
+
     if status:
         query = query.where(Invoice.status == status)
+
     return db.execute(query.offset(skip).limit(limit)).scalars().all()
 
 

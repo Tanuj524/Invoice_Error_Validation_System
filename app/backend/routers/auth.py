@@ -1,5 +1,5 @@
 # routers/auth.py
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from sqlalchemy import select
@@ -34,6 +34,7 @@ def register(payload: schemas.UserIn, db: Session = Depends(get_db)):
 
 @router.post("/login")
 def login(
+    response: Response,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
 ):
@@ -47,11 +48,30 @@ def login(
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User account is inactive"
+        )
 
     token = create_access_token(data={"user_id": user.id, "role": user.role})
+    response.set_cookie(
+        key="jwt",
+        value=token,
+        httponly=True,
+        samesite="lax",
+        max_age=86400,
+    )
     return {"access_token": token, "token_type": "bearer"}
 
 
 @router.get("/me", response_model=schemas.UserOut)
 def get_me(current_user: User = Depends(get_current_user)):
     return current_user
+
+
+@router.post("/logout")
+def logout(response: Response):
+    response.delete_cookie("jwt")
+    return {"message": "Logged out successfully"}

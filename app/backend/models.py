@@ -75,10 +75,19 @@ class Invoice(Base):
         server_default=InvoiceStatus.PENDING.value,
     )
 
+    created_by = Column(
+    Integer,
+    ForeignKey("users.id", ondelete="SET NULL"),
+    nullable=True,
+)
+
     created_at = Column(
         TIMESTAMP(timezone=True), nullable=False,
         server_default=text("now()")
     )
+
+    creator = relationship("User", back_populates="invoices")     
+
 
     items = relationship(
         "InvoiceItem",
@@ -184,3 +193,4 @@ class User(Base):
         TIMESTAMP(timezone=True), nullable=False,
         server_default=text("now()")
     )
+    invoices = relationship("Invoice", back_populates="creator")

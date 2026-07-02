@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Cookie
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -60,10 +60,12 @@ def decode_token(token: str) -> str:
 
 
 def get_current_user(
-    token: str = Depends(oauth2_scheme),
+    jwt: str = Cookie(default=None),
     db: Session = Depends(get_db),
 ) -> User:
-    username = decode_token(token)
+    if jwt is None:
+        raise HTTPException(401, "Not authenticated")
+    username = decode_token(jwt)
 
     user = db.execute(
         select(User).where(User.id == username)
