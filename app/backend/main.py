@@ -1,17 +1,25 @@
 from fastapi import FastAPI
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from .routers.auth import limiter
 from fastapi.middleware.cors import CORSMiddleware
 from .routers import invoices,auth,admin
 from .db import Base,engine
 from . import models
+from .config import settings
 app = FastAPI()
+
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 Base.metadata.create_all(bind=engine)
 
-origins=["*"]
+
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=settings.allowed_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

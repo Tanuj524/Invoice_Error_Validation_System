@@ -1,5 +1,5 @@
 # schemas.py
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
@@ -33,7 +33,6 @@ class InvoiceIn(BaseModel):
     sgst_total: Optional[Decimal] = None
     cgst_total: Optional[Decimal] = None
     grand_total: Optional[Decimal] = None
-    created_by: int = None
     items: list[InvoiceItemIn] = []
 
 
@@ -83,7 +82,7 @@ class InvoiceOut(BaseModel):
     cgst_total: Optional[Decimal] = None
     grand_total: Optional[Decimal] = None
     status: InvoiceStatus
-    created_by: int = None
+    created_by: Optional[int] = None
     created_at: datetime
 
 
@@ -94,9 +93,14 @@ class InvoiceDetailOut(InvoiceOut):
 
 class UserIn(BaseModel):
     username: str
-    email: str
+    email: EmailStr
     password: str  # plain text — gets hashed in the router
-
+    @field_validator("password")
+    @classmethod
+    def password_min_length(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters long")
+        return v
 
 class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)

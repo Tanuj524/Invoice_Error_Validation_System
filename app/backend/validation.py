@@ -43,11 +43,61 @@ def _make_error(
 
 
 
+def _validate_item_negative_amounts(
+    invoice: Invoice,
+    item: InvoiceItem,
+) -> list[ValidationError]:
+    errors = []
+    for field_name in ("fixed_rent", "sgst", "cgst", "total"):
+        value = getattr(item, field_name)
+        if value is not None and value < 0:
+            errors.append(_make_error(
+                invoice=invoice,
+                level=ErrorLevel.ITEM,
+                category=ErrorCategory.AMOUNT,
+                field_name=field_name,
+                error_message=f"Item {field_name} is negative, which is not valid for a billed amount.",
+                expected_value=Decimal("0.00"),
+                actual_value=value,
+                invoice_item=item,
+            ))
+    return errors
+
+
+def _validate_item_sgst_cgst_symmetry(
+    invoice: Invoice,
+    item: InvoiceItem,
+) -> list[ValidationError]:
+    """Under Indian intra-state GST rules, SGST and CGST are split evenly,
+    so they should be equal for a given item. A mismatch usually indicates
+    an OCR/extraction error rather than a genuine tax difference."""
+    errors = []
+    if item.sgst is not None and item.cgst is not None:
+        if _diff(item.sgst, item.cgst) > TOLERANCE:
+            errors.append(_make_error(
+                invoice=invoice,
+                level=ErrorLevel.ITEM,
+                category=ErrorCategory.AMOUNT,
+                field_name="sgst",
+                error_message=(
+                    f"SGST and CGST are expected to be equal for intra-state billing, "
+                    f"but differ (sgst={item.sgst}, cgst={item.cgst})."
+                ),
+                expected_value=item.cgst,
+                actual_value=item.sgst,
+                invoice_item=item,
+            ))
+    return errors
+
+
 def _validate_item_amount(
     invoice: Invoice,
     item: InvoiceItem,
 ) -> list[ValidationError]:
     errors = []
+
+    errors.extend(_validate_item_negative_amounts(invoice, item))
+    errors.extend(_validate_item_sgst_cgst_symmetry(invoice, item))
 
     if any(v is None for v in [item.fixed_rent, item.sgst, item.cgst, item.total]):
         return errors  
@@ -75,13 +125,56 @@ def _validate_item_amount(
 
 
 
+def _validate_invoice_negative_amounts(invoice: Invoice) -> list[ValidationError]:
+    errors = []
+    for field_name in ("subtotal", "sgst_total", "cgst_total", "grand_total"):
+        value = getattr(invoice, field_name)
+        if value is not None and value < 0:
+            errors.append(_make_error(
+                invoice=invoice,
+                level=ErrorLevel.INVOICE,
+                category=ErrorCategory.AMOUNT,
+                field_name=field_name,
+                error_message=f"Invoice {field_name} is negative, which is not valid for a billed amount.",
+                expected_value=Decimal("0.00"),
+                actual_value=value,
+            ))
+    return errors
+
+
+def _validate_invoice_sgst_cgst_symmetry(invoice: Invoice) -> list[ValidationError]:
+    errors = []
+    if invoice.sgst_total is not None and invoice.cgst_total is not None:
+        if _diff(invoice.sgst_total, invoice.cgst_total) > TOLERANCE:
+            errors.append(_make_error(
+                invoice=invoice,
+                level=ErrorLevel.INVOICE,
+                category=ErrorCategory.AMOUNT,
+                field_name="sgst_total",
+                error_message=(
+                    f"SGST total and CGST total are expected to be equal for intra-state "
+                    f"billing, but differ (sgst_total={invoice.sgst_total}, cgst_total={invoice.cgst_total})."
+                ),
+                expected_value=invoice.cgst_total,
+                actual_value=invoice.sgst_total,
+            ))
+    return errors
+
+
 def _validate_invoice_amounts(invoice: Invoice) -> list[ValidationError]:
     errors = []
+    errors.extend(_validate_invoice_negative_amounts(invoice))
+    errors.extend(_validate_invoice_sgst_cgst_symmetry(invoice))
     items = invoice.items
 
-    computed_subtotal = _round(sum(i.fixed_rent for i in items if i.fixed_rent is not None))
-    computed_sgst    = _round(sum(i.sgst        for i in items if i.sgst        is not None))
-    computed_cgst    = _round(sum(i.cgst        for i in items if i.cgst        is not None))
+    # sum()'s default start value is the int 0, which would silently mix
+    # int and Decimal arithmetic (and misrepresent "no items yet" as an
+    # exact Decimal 0.00 match). Passing Decimal("0.00") as the start value
+    # keeps the result a Decimal throughout.
+    zero = Decimal("0.00")
+    computed_subtotal = _round(sum((i.fixed_rent for i in items if i.fixed_rent is not None), zero))
+    computed_sgst    = _round(sum((i.sgst        for i in items if i.sgst        is not None), zero))
+    computed_cgst    = _round(sum((i.cgst        for i in items if i.cgst        is not None), zero))
 
     checks = [
         ("subtotal",   computed_subtotal, invoice.subtotal),

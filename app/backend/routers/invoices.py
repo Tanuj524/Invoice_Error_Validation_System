@@ -1,6 +1,7 @@
 from fastapi import HTTPException, Depends, APIRouter,Query
 from sqlalchemy.orm import Session
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from typing import Optional
 from ..db import get_db
 from .. import schemas
@@ -15,6 +16,19 @@ from ..models import User,UserRole
 router=APIRouter(
     prefix="/invoices",
     tags=["Invoices"])
+
+
+def _get_owned_invoice(invoice_id: int, db: Session, current_user: User) -> Invoice:
+    """Fetch an invoice and enforce that non-admins can only access their own.
+    Admins can access any invoice. Raises 404 for both "doesn't exist" and
+    "not yours" so an attacker can't distinguish the two cases."""
+    invoice = db.get(Invoice, invoice_id)
+    if not invoice:
+        raise HTTPException(404, "Invoice not found")
+    if current_user.role != UserRole.ADMIN and invoice.created_by != current_user.id:
+        raise HTTPException(404, "Invoice not found")
+    return invoice
+
 
 @router.post("/upload", response_model=schemas.InvoiceDetailOut, status_code=201)
 def create_invoice(payload: schemas.InvoiceIn, db: Session = Depends(get_db), current_user: User = Depends(require_user)):
@@ -43,16 +57,25 @@ def create_invoice(payload: schemas.InvoiceIn, db: Session = Depends(get_db), cu
         InvoiceItem(**item.model_dump()) for item in payload.items
     ]
 
-    db.add(invoice)
-    db.commit()
-    db.refresh(invoice)
-
+    # Run validation against the in-memory object before the first commit,
+    # then persist the invoice, its items, and its final status/errors in a
+    # single commit. This shrinks the window where an invoice could be left
+    # stuck in PROCESSING if the process crashes mid-request (previously
+    # there were two separate commits).
     errors = validate_invoice(invoice)
-    db.add_all(errors)
     invoice.status = InvoiceStatus.FLAGGED if errors else InvoiceStatus.VALID
-    db.commit()
-    db.refresh(invoice)
+    invoice.errors = errors
 
+    db.add(invoice)
+    try:
+        db.commit()
+    except IntegrityError:
+        # Handles the race where two requests both pass the "existing"
+        # check above and then both try to insert the same invoice_number.
+        db.rollback()
+        raise HTTPException(409, f"Invoice {payload.invoice_number} already exists")
+
+    db.refresh(invoice)
     return invoice
     
 
@@ -60,8 +83,8 @@ def create_invoice(payload: schemas.InvoiceIn, db: Session = Depends(get_db), cu
 @router.get("/", response_model=list[schemas.InvoiceOut])
 def list_invoices(
     status: Optional[InvoiceStatus] = Query(None),
-    skip: int = 0,
-    limit: int = 50,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_user)
 ):
@@ -82,18 +105,14 @@ def list_invoices(
 
 @router.get("/{invoice_id}/items", response_model=list[schemas.InvoiceItemOut])
 def get_invoice_items(invoice_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_user)):
-    invoice = db.get(Invoice, invoice_id)
-    if not invoice:
-        raise HTTPException(404, "Invoice not found")
+    invoice = _get_owned_invoice(invoice_id, db, current_user)
     return invoice.items
 
 
 
 @router.get("/{invoice_id}/errors", response_model=list[schemas.ValidationErrorOut])
 def get_invoice_errors(invoice_id: int, db: Session = Depends(get_db),current_user: User = Depends(require_user)):
-    invoice = db.get(Invoice, invoice_id)
-    if not invoice:
-        raise HTTPException(404, "Invoice not found")
+    invoice = _get_owned_invoice(invoice_id, db, current_user)
     return invoice.errors
 
 
@@ -101,9 +120,7 @@ def get_invoice_errors(invoice_id: int, db: Session = Depends(get_db),current_us
 
 @router.delete("/{invoice_id}", status_code=204)
 def delete_invoice(invoice_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_user)):
-    invoice = db.get(Invoice, invoice_id)
-    if not invoice:
-        raise HTTPException(404, "Invoice not found")
+    invoice = _get_owned_invoice(invoice_id, db, current_user)
     db.delete(invoice)
     db.commit()
 
@@ -115,5 +132,6 @@ def get_invoice_by_number(invoice_number: str, db: Session = Depends(get_db), cu
     ).scalar_one_or_none()
     if not invoice:
         raise HTTPException(404, f"Invoice {invoice_number} not found")
+    if current_user.role != UserRole.ADMIN and invoice.created_by != current_user.id:
+        raise HTTPException(404, f"Invoice {invoice_number} not found")
     return invoice
-
