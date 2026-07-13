@@ -80,6 +80,7 @@ def login(
         httponly=True,
         samesite="lax",
         max_age=86400,
+        secure=True,
     )
     return {"access_token": token, "token_type": "bearer"}
 
