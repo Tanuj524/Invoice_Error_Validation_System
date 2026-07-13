@@ -47,6 +47,29 @@ class ErrorCategory(str, enum.Enum):
     AMOUNT = "AMOUNT"  
 
 
+import secrets
+
+class PasswordResetToken(Base):
+    __tablename__ = "password_reset_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    token_hash = Column(String(255), nullable=False, unique=True, index=True)
+    expires_at = Column(TIMESTAMP(timezone=True), nullable=False)
+    used_at = Column(TIMESTAMP(timezone=True), nullable=True)
+    created_at = Column(
+        TIMESTAMP(timezone=True), nullable=False,
+        server_default=text("now()")
+    )
+
+    user = relationship("User")
+
+
 class Invoice(Base):
     __tablename__ = "invoices"
 
@@ -194,3 +217,4 @@ class User(Base):
         server_default=text("now()")
     )
     invoices = relationship("Invoice", back_populates="creator")
+    reset_tokens = relationship("PasswordResetToken", cascade="all, delete-orphan")

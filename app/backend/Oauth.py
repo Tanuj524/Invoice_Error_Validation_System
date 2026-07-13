@@ -12,6 +12,11 @@ from .db import get_db
 from .models import User, UserRole
 from .config import settings
 
+import hashlib
+import secrets as secrets_module
+
+
+RESET_TOKEN_EXPIRE_MINUTES = 30
 
 SECRET_KEY = settings.JWT_SECRET
 ALGORITHM = settings.ALGORITHM
@@ -33,6 +38,18 @@ def hash_password(password: str) -> str:
 def verify_password(plain: str, hashed: str) -> bool:
     return pwd_context.verify(plain, hashed)
 
+
+def generate_reset_token() -> tuple[str, str]:
+    """Returns (raw_token, token_hash). Raw token goes in the email link;
+    only the hash is stored in the DB."""
+    raw = secrets_module.token_urlsafe(32)
+    token_hash = hashlib.sha256(raw.encode()).hexdigest()
+    return raw, token_hash
+
+
+
+def hash_reset_token(raw_token: str) -> str:
+    return hashlib.sha256(raw_token.encode()).hexdigest()
 
 def verify_password_or_dummy(plain: str, hashed: Optional[str]) -> bool:
     """Always runs a bcrypt comparison, even for unknown users, so failed
