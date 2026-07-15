@@ -1,8 +1,8 @@
-"""initial schema
+"""Initial migration
 
-Revision ID: d90832a65784
+Revision ID: 2c655099dbde
 Revises: 
-Create Date: 2026-07-13 12:59:28.432908
+Create Date: 2026-07-15 17:48:58.370991
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'd90832a65784'
+revision: str = '2c655099dbde'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -33,7 +33,7 @@ def upgrade() -> None:
     )
     op.create_index(op.f('ix_users_email'), 'users', ['email'], unique=True)
     op.create_index(op.f('ix_users_id'), 'users', ['id'], unique=False)
-    op.create_index(op.f('ix_users_username'), 'users', ['username'], unique=True)
+    op.create_index(op.f('ix_users_username'), 'users', ['username'], unique=False)
     op.create_table('invoices',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('invoice_number', sa.String(length=100), nullable=False),
@@ -55,6 +55,19 @@ def upgrade() -> None:
     )
     op.create_index(op.f('ix_invoices_id'), 'invoices', ['id'], unique=False)
     op.create_index(op.f('ix_invoices_invoice_number'), 'invoices', ['invoice_number'], unique=True)
+    op.create_table('password_reset_tokens',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('user_id', sa.Integer(), nullable=False),
+    sa.Column('token_hash', sa.String(length=255), nullable=False),
+    sa.Column('expires_at', sa.TIMESTAMP(timezone=True), nullable=False),
+    sa.Column('used_at', sa.TIMESTAMP(timezone=True), nullable=True),
+    sa.Column('created_at', sa.TIMESTAMP(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_password_reset_tokens_id'), 'password_reset_tokens', ['id'], unique=False)
+    op.create_index(op.f('ix_password_reset_tokens_token_hash'), 'password_reset_tokens', ['token_hash'], unique=True)
+    op.create_index(op.f('ix_password_reset_tokens_user_id'), 'password_reset_tokens', ['user_id'], unique=False)
     op.create_table('invoice_items',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('invoice_id', sa.Integer(), nullable=False),
@@ -75,7 +88,7 @@ def upgrade() -> None:
     sa.Column('invoice_id', sa.Integer(), nullable=False),
     sa.Column('invoice_item_id', sa.Integer(), nullable=True),
     sa.Column('level', sa.Enum('INVOICE', 'ITEM', name='error_level'), nullable=False),
-    sa.Column('category', sa.Enum('DATE', 'AMOUNT', name='error_category'), nullable=False),
+    sa.Column('category', sa.Enum('DATE', 'AMOUNT', 'MISSING_DATA', name='error_category'), nullable=False),
     sa.Column('field_name', sa.String(length=100), nullable=True),
     sa.Column('error_message', sa.Text(), nullable=True),
     sa.Column('expected_value', sa.String(length=255), nullable=True),
@@ -102,6 +115,10 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_invoice_items_invoice_id'), table_name='invoice_items')
     op.drop_index(op.f('ix_invoice_items_id'), table_name='invoice_items')
     op.drop_table('invoice_items')
+    op.drop_index(op.f('ix_password_reset_tokens_user_id'), table_name='password_reset_tokens')
+    op.drop_index(op.f('ix_password_reset_tokens_token_hash'), table_name='password_reset_tokens')
+    op.drop_index(op.f('ix_password_reset_tokens_id'), table_name='password_reset_tokens')
+    op.drop_table('password_reset_tokens')
     op.drop_index(op.f('ix_invoices_invoice_number'), table_name='invoices')
     op.drop_index(op.f('ix_invoices_id'), table_name='invoices')
     op.drop_table('invoices')

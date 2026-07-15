@@ -6,11 +6,6 @@ from typing import Optional
 
 from .models import SourceFormat, InvoiceStatus, ErrorLevel, ErrorCategory, UserRole
 
-
-# ---------------------------------------------------------------------------
-# Input schemas (frontend -> backend)
-# ---------------------------------------------------------------------------
-
 class InvoiceItemIn(BaseModel):
     phone_number: Optional[str] = None
     employee_code: Optional[str] = None
@@ -94,7 +89,7 @@ class InvoiceDetailOut(InvoiceOut):
 class UserIn(BaseModel):
     username: str
     email: EmailStr
-    password: str  # plain text — gets hashed in the router
+    password: str  
     @field_validator("password")
     @classmethod
     def password_min_length(cls, v: str) -> str:
@@ -132,3 +127,32 @@ class ResetPasswordIn(BaseModel):
         if len(v) < 8:
             raise ValueError("Password must be at least 8 characters long")
         return v
+    
+
+class BulkInvoiceIn(BaseModel):
+    invoices: list[InvoiceIn]
+
+    @field_validator("invoices")
+    @classmethod
+    def limit_batch_size(cls, v: list["InvoiceIn"]) -> list["InvoiceIn"]:
+        if len(v) == 0:
+            raise ValueError("Batch must contain at least one invoice")
+        if len(v) > 100:
+            raise ValueError("Batch cannot exceed 100 invoices per request")
+        return v
+
+
+class BulkInvoiceResultItem(BaseModel):
+    index: int                     
+    invoice_number: str
+    success: bool
+    invoice_id: Optional[int] = None
+    status: Optional[InvoiceStatus] = None
+    error: Optional[str] = None
+
+
+class BulkInvoiceOut(BaseModel):
+    total: int
+    succeeded: int
+    failed: int
+    results: list[BulkInvoiceResultItem]

@@ -135,3 +135,89 @@ def get_invoice_by_number(invoice_number: str, db: Session = Depends(get_db), cu
     if current_user.role != UserRole.ADMIN and invoice.created_by != current_user.id:
         raise HTTPException(404, f"Invoice {invoice_number} not found")
     return invoice
+
+
+
+@router.post("/upload/bulk", response_model=schemas.BulkInvoiceOut, status_code=201)
+def create_invoices_bulk(
+    payload: schemas.BulkInvoiceIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_user),
+):
+    results: list[schemas.BulkInvoiceResultItem] = []
+
+    for index, item in enumerate(payload.invoices):
+        # Each invoice gets its own savepoint so one failure doesn't
+        # poison the whole transaction for the rest of the batch.
+        try:
+            with db.begin_nested():
+                existing = db.execute(
+                    select(Invoice).where(Invoice.invoice_number == item.invoice_number)
+                ).scalar_one_or_none()
+                if existing:
+                    raise ValueError(f"Invoice {item.invoice_number} already exists")
+
+                invoice = Invoice(
+                    invoice_number=item.invoice_number,
+                    customer_name=item.customer_name,
+                    source_format=item.source_format,
+                    source_file_path=item.source_file_path,
+                    bill_date=item.bill_date,
+                    bill_period_start=item.bill_period_start,
+                    bill_period_end=item.bill_period_end,
+                    subtotal=item.subtotal,
+                    sgst_total=item.sgst_total,
+                    cgst_total=item.cgst_total,
+                    grand_total=item.grand_total,
+                    status=InvoiceStatus.PROCESSING,
+                    created_by=current_user.id,
+                )
+                invoice.items = [
+                    InvoiceItem(**line.model_dump()) for line in item.items
+                ]
+
+                errors = validate_invoice(invoice)
+                invoice.status = InvoiceStatus.FLAGGED if errors else InvoiceStatus.VALID
+                invoice.errors = errors
+
+                db.add(invoice)
+                db.flush()  # assigns invoice.id without committing the outer transaction
+
+            results.append(schemas.BulkInvoiceResultItem(
+                index=index,
+                invoice_number=item.invoice_number,
+                success=True,
+                invoice_id=invoice.id,
+                status=invoice.status,
+            ))
+
+        except IntegrityError as e:
+            msg = f"Invoice {item.invoice_number} already exists" if "invoice_number" in str(e.orig) else str(e.orig)
+            results.append(schemas.BulkInvoiceResultItem(
+                index=index, invoice_number=item.invoice_number,
+                success=False, error=msg,
+        ))
+        except ValueError as e:
+            results.append(schemas.BulkInvoiceResultItem(
+                index=index, invoice_number=item.invoice_number,
+                success=False, error=str(e),
+        ))
+        except Exception as e:
+            results.append(schemas.BulkInvoiceResultItem(
+            index=index, invoice_number=item.invoice_number,
+            success=False, error=f"Unexpected error: {e}",
+    ))
+
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, f"Failed to save batch: {e}")
+
+    succeeded = sum(1 for r in results if r.success)
+    return schemas.BulkInvoiceOut(
+        total=len(results),
+        succeeded=succeeded,
+        failed=len(results) - succeeded,
+        results=results,
+    )

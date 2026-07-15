@@ -31,10 +31,10 @@ limiter = Limiter(key_func=get_remote_address)
 @limiter.limit("5/minute")
 def register(request: Request, payload: schemas.UserIn, db: Session = Depends(get_db)):
     existing = db.execute(
-        select(User).where(User.username == payload.username)
+        select(User).where(User.email == payload.email)
     ).scalar_one_or_none()
     if existing:
-        raise HTTPException(409, "Username already taken")
+        raise HTTPException(409, "Email already registered")
 
     user = User(
         username=payload.username,

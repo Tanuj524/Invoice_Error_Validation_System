@@ -45,6 +45,7 @@ class ErrorLevel(str, enum.Enum):
 class ErrorCategory(str, enum.Enum):
     DATE = "DATE"      
     AMOUNT = "AMOUNT"  
+    MISSING_DATA = "MISSING_DATA"
 
 
 import secrets
@@ -207,7 +208,7 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
-    username = Column(String(100), nullable=False, unique=True, index=True)
+    username = Column(String(100), nullable=False, unique=False, index=True)
     email = Column(String(255), nullable=False, unique=True, index=True)
     hashed_password = Column(String(255), nullable=False)
     role = Column(SAEnum(UserRole, name="user_role"), nullable=False, default=UserRole.USER)

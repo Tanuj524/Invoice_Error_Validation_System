@@ -29,9 +29,15 @@ def _make_error(
     actual_value: Decimal,
     invoice_item: Optional[InvoiceItem] = None,
 ) -> ValidationError:
-    return ValidationError(
-        invoice_id=invoice.id,
-        invoice_item_id=invoice_item.id if invoice_item else None,
+    # Assign via the ORM relationships (not the raw *_id columns) because
+    # `invoice` and `invoice_item` are transient objects at this point —
+    # they haven't been flushed yet, so their .id is still None. Setting
+    # the relationship lets SQLAlchemy resolve the real foreign key once
+    # the parent row actually gets its primary key at flush time; baking
+    # in `invoice_item.id` here would freeze in a stale None and trip the
+    # ck_validation_error_level_consistency check constraint for ITEM-level
+    # errors.
+    error = ValidationError(
         level=level,
         category=category,
         field_name=field_name,
@@ -39,6 +45,10 @@ def _make_error(
         expected_value=str(expected_value),
         actual_value=str(actual_value),
     )
+    error.invoice = invoice
+    if invoice_item is not None:
+        error.invoice_item = invoice_item
+    return error
 
 
 
@@ -59,6 +69,55 @@ def _validate_item_negative_amounts(
                 error_message=f"Item {field_name} is negative, which is not valid for a billed amount.",
                 expected_value=Decimal("0.00"),
                 actual_value=value,
+                invoice_item=item,
+            ))
+    return errors
+
+
+def _validate_item_required_fields(
+    invoice: Invoice,
+    item: InvoiceItem,
+) -> list[ValidationError]:
+    """Flags any missing (null) amount fields on an item. These fields are
+    needed to cross-check the item total, so a null here means that check
+    can't run at all — worth surfacing as its own error rather than being
+    silently skipped."""
+    errors = []
+    for field_name in ("fixed_rent", "sgst", "cgst", "total"):
+        if getattr(item, field_name) is None:
+            errors.append(_make_error(
+                invoice=invoice,
+                level=ErrorLevel.ITEM,
+                category=ErrorCategory.MISSING_DATA,
+                field_name=field_name,
+                error_message=f"Item {field_name} is missing (null).",
+                expected_value="<not null>",
+                actual_value="null",
+                invoice_item=item,
+            ))
+    return errors
+
+
+def _validate_item_optional_field_nulls(
+    invoice: Invoice,
+    item: InvoiceItem,
+) -> list[ValidationError]:
+    """Flags nulls in the item's other nullable (Optional) columns —
+    phone_number, employee_code, employee_name. These aren't used in any
+    arithmetic check, but a missing identity field usually means the
+    source document extraction failed to pick it up, so it's still worth
+    surfacing as an error."""
+    errors = []
+    for field_name in ("phone_number", "employee_code", "employee_name"):
+        if getattr(item, field_name) is None:
+            errors.append(_make_error(
+                invoice=invoice,
+                level=ErrorLevel.ITEM,
+                category=ErrorCategory.MISSING_DATA,
+                field_name=field_name,
+                error_message=f"Item {field_name} is missing (null).",
+                expected_value="<not null>",
+                actual_value="null",
                 invoice_item=item,
             ))
     return errors
@@ -97,10 +156,12 @@ def _validate_item_amount(
     errors = []
 
     errors.extend(_validate_item_negative_amounts(invoice, item))
+    errors.extend(_validate_item_required_fields(invoice, item))
+    errors.extend(_validate_item_optional_field_nulls(invoice, item))
     errors.extend(_validate_item_sgst_cgst_symmetry(invoice, item))
 
     if any(v is None for v in [item.fixed_rent, item.sgst, item.cgst, item.total]):
-        return errors  
+        return errors  # already flagged as missing above; can't cross-check total
 
     expected_total = _round(item.fixed_rent + item.sgst + item.cgst)
     diff = _diff(expected_total, item.total)
@@ -142,6 +203,51 @@ def _validate_invoice_negative_amounts(invoice: Invoice) -> list[ValidationError
     return errors
 
 
+def _validate_invoice_required_fields(invoice: Invoice) -> list[ValidationError]:
+    """Flags any missing (null) amount fields on the invoice itself. These
+    are needed for the sum-matches-items and grand-total checks below, so a
+    null here means those checks can't run at all — worth surfacing on its
+    own rather than being silently skipped."""
+    errors = []
+    for field_name in ("subtotal", "sgst_total", "cgst_total", "grand_total"):
+        if getattr(invoice, field_name) is None:
+            errors.append(_make_error(
+                invoice=invoice,
+                level=ErrorLevel.INVOICE,
+                category=ErrorCategory.MISSING_DATA,
+                field_name=field_name,
+                error_message=f"Invoice {field_name} is missing (null).",
+                expected_value="<not null>",
+                actual_value="null",
+            ))
+    return errors
+
+
+def _validate_invoice_optional_field_nulls(invoice: Invoice) -> list[ValidationError]:
+    """Flags nulls in the invoice's other nullable (Optional) columns —
+    customer_name, source_file_path. Not used in any arithmetic check, but
+    a missing value usually means extraction failed to pick it up.
+
+    created_by is deliberately excluded: it's a system-set field (always
+    populated at creation time from the authenticated user) rather than
+    user-supplied invoice data, and it only becomes null later via
+    ON DELETE SET NULL if that user's account is removed — not a data
+    quality issue this validator is meant to catch."""
+    errors = []
+    for field_name in ("customer_name", "source_file_path"):
+        if getattr(invoice, field_name) is None:
+            errors.append(_make_error(
+                invoice=invoice,
+                level=ErrorLevel.INVOICE,
+                category=ErrorCategory.MISSING_DATA,
+                field_name=field_name,
+                error_message=f"Invoice {field_name} is missing (null).",
+                expected_value="<not null>",
+                actual_value="null",
+            ))
+    return errors
+
+
 def _validate_invoice_sgst_cgst_symmetry(invoice: Invoice) -> list[ValidationError]:
     errors = []
     if invoice.sgst_total is not None and invoice.cgst_total is not None:
@@ -164,6 +270,8 @@ def _validate_invoice_sgst_cgst_symmetry(invoice: Invoice) -> list[ValidationErr
 def _validate_invoice_amounts(invoice: Invoice) -> list[ValidationError]:
     errors = []
     errors.extend(_validate_invoice_negative_amounts(invoice))
+    errors.extend(_validate_invoice_required_fields(invoice))
+    errors.extend(_validate_invoice_optional_field_nulls(invoice))
     errors.extend(_validate_invoice_sgst_cgst_symmetry(invoice))
     items = invoice.items
 
@@ -172,9 +280,22 @@ def _validate_invoice_amounts(invoice: Invoice) -> list[ValidationError]:
     # exact Decimal 0.00 match). Passing Decimal("0.00") as the start value
     # keeps the result a Decimal throughout.
     zero = Decimal("0.00")
-    computed_subtotal = _round(sum((i.fixed_rent for i in items if i.fixed_rent is not None), zero))
-    computed_sgst    = _round(sum((i.sgst        for i in items if i.sgst        is not None), zero))
-    computed_cgst    = _round(sum((i.cgst        for i in items if i.cgst        is not None), zero))
+
+    # If any item is missing the relevant field, the sum can't be trusted —
+    # mirror the item-level cross-check's behavior (which aborts rather than
+    # treating a null as zero) instead of silently summing over the
+    # non-null items. Without this, a missing item.fixed_rent would both
+    # (a) get flagged as MISSING_DATA on the item, and (b) make a perfectly
+    # correct invoice.subtotal look wrong by the amount of that missing
+    # item — or worse, mask a genuinely wrong subtotal that happens to
+    # equal the partial sum.
+    any_fixed_rent_missing = any(i.fixed_rent is None for i in items)
+    any_sgst_missing = any(i.sgst is None for i in items)
+    any_cgst_missing = any(i.cgst is None for i in items)
+
+    computed_subtotal = None if any_fixed_rent_missing else _round(sum((i.fixed_rent for i in items), zero))
+    computed_sgst    = None if any_sgst_missing        else _round(sum((i.sgst        for i in items), zero))
+    computed_cgst    = None if any_cgst_missing        else _round(sum((i.cgst        for i in items), zero))
 
     checks = [
         ("subtotal",   computed_subtotal, invoice.subtotal),
@@ -220,8 +341,30 @@ def _validate_invoice_amounts(invoice: Invoice) -> list[ValidationError]:
 
 
 
+def _validate_invoice_date_required_fields(invoice: Invoice) -> list[ValidationError]:
+    """Flags any missing (null) date fields on the invoice. These are
+    needed for the ordering checks below, so a null here means those checks
+    can't run at all — worth surfacing on its own rather than being
+    silently skipped."""
+    errors = []
+    for field_name in ("bill_date", "bill_period_start", "bill_period_end"):
+        if getattr(invoice, field_name) is None:
+            errors.append(_make_error(
+                invoice=invoice,
+                level=ErrorLevel.INVOICE,
+                category=ErrorCategory.MISSING_DATA,
+                field_name=field_name,
+                error_message=f"Invoice {field_name} is missing (null).",
+                expected_value="<not null>",
+                actual_value="null",
+            ))
+    return errors
+
+
 def _validate_invoice_dates(invoice: Invoice) -> list[ValidationError]:
     errors = []
+
+    errors.extend(_validate_invoice_date_required_fields(invoice))
 
     if invoice.bill_period_start and invoice.bill_period_end:
         if invoice.bill_period_start > invoice.bill_period_end:
@@ -245,6 +388,18 @@ def _validate_invoice_dates(invoice: Invoice) -> list[ValidationError]:
                 field_name="bill_date",
                 error_message="Bill date is before bill period start.",
                 expected_value=f">= {invoice.bill_period_start}",
+                actual_value=str(invoice.bill_date),
+            ))
+
+    if invoice.bill_date and invoice.bill_period_end:
+        if invoice.bill_date < invoice.bill_period_end:
+            errors.append(_make_error(
+                invoice=invoice,
+                level=ErrorLevel.INVOICE,
+                category=ErrorCategory.DATE,
+                field_name="bill_date",
+                error_message="Bill date is before bill period end; invoices are normally issued on or after the period they cover ends.",
+                expected_value=f">= {invoice.bill_period_end}",
                 actual_value=str(invoice.bill_date),
             ))
 
