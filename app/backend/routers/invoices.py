@@ -19,9 +19,7 @@ router=APIRouter(
 
 
 def _get_owned_invoice(invoice_id: int, db: Session, current_user: User) -> Invoice:
-    """Fetch an invoice and enforce that non-admins can only access their own.
-    Admins can access any invoice. Raises 404 for both "doesn't exist" and
-    "not yours" so an attacker can't distinguish the two cases."""
+  
     invoice = db.get(Invoice, invoice_id)
     if not invoice:
         raise HTTPException(404, "Invoice not found")
@@ -57,11 +55,7 @@ def create_invoice(payload: schemas.InvoiceIn, db: Session = Depends(get_db), cu
         InvoiceItem(**item.model_dump()) for item in payload.items
     ]
 
-    # Run validation against the in-memory object before the first commit,
-    # then persist the invoice, its items, and its final status/errors in a
-    # single commit. This shrinks the window where an invoice could be left
-    # stuck in PROCESSING if the process crashes mid-request (previously
-    # there were two separate commits).
+    
     errors = validate_invoice(invoice)
     invoice.status = InvoiceStatus.FLAGGED if errors else InvoiceStatus.VALID
     invoice.errors = errors
@@ -70,8 +64,6 @@ def create_invoice(payload: schemas.InvoiceIn, db: Session = Depends(get_db), cu
     try:
         db.commit()
     except IntegrityError:
-        # Handles the race where two requests both pass the "existing"
-        # check above and then both try to insert the same invoice_number.
         db.rollback()
         raise HTTPException(409, f"Invoice {payload.invoice_number} already exists")
 
@@ -90,7 +82,6 @@ def list_invoices(
 ):
     query = select(Invoice)
 
-    # admins see all invoices, users only see their own
     if current_user.role == UserRole.ADMIN:
         pass
     else:
@@ -147,8 +138,7 @@ def create_invoices_bulk(
     results: list[schemas.BulkInvoiceResultItem] = []
 
     for index, item in enumerate(payload.invoices):
-        # Each invoice gets its own savepoint so one failure doesn't
-        # poison the whole transaction for the rest of the batch.
+       
         try:
             with db.begin_nested():
                 existing = db.execute(
@@ -181,7 +171,7 @@ def create_invoices_bulk(
                 invoice.errors = errors
 
                 db.add(invoice)
-                db.flush()  # assigns invoice.id without committing the outer transaction
+                db.flush() 
 
             results.append(schemas.BulkInvoiceResultItem(
                 index=index,

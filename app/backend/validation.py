@@ -29,14 +29,7 @@ def _make_error(
     actual_value: Decimal,
     invoice_item: Optional[InvoiceItem] = None,
 ) -> ValidationError:
-    # Assign via the ORM relationships (not the raw *_id columns) because
-    # `invoice` and `invoice_item` are transient objects at this point —
-    # they haven't been flushed yet, so their .id is still None. Setting
-    # the relationship lets SQLAlchemy resolve the real foreign key once
-    # the parent row actually gets its primary key at flush time; baking
-    # in `invoice_item.id` here would freeze in a stale None and trip the
-    # ck_validation_error_level_consistency check constraint for ITEM-level
-    # errors.
+   
     error = ValidationError(
         level=level,
         category=category,
@@ -224,15 +217,7 @@ def _validate_invoice_required_fields(invoice: Invoice) -> list[ValidationError]
 
 
 def _validate_invoice_optional_field_nulls(invoice: Invoice) -> list[ValidationError]:
-    """Flags nulls in the invoice's other nullable (Optional) columns —
-    customer_name, source_file_path. Not used in any arithmetic check, but
-    a missing value usually means extraction failed to pick it up.
-
-    created_by is deliberately excluded: it's a system-set field (always
-    populated at creation time from the authenticated user) rather than
-    user-supplied invoice data, and it only becomes null later via
-    ON DELETE SET NULL if that user's account is removed — not a data
-    quality issue this validator is meant to catch."""
+   
     errors = []
     for field_name in ("customer_name", "source_file_path"):
         if getattr(invoice, field_name) is None:
@@ -275,20 +260,10 @@ def _validate_invoice_amounts(invoice: Invoice) -> list[ValidationError]:
     errors.extend(_validate_invoice_sgst_cgst_symmetry(invoice))
     items = invoice.items
 
-    # sum()'s default start value is the int 0, which would silently mix
-    # int and Decimal arithmetic (and misrepresent "no items yet" as an
-    # exact Decimal 0.00 match). Passing Decimal("0.00") as the start value
-    # keeps the result a Decimal throughout.
+    
     zero = Decimal("0.00")
 
-    # If any item is missing the relevant field, the sum can't be trusted —
-    # mirror the item-level cross-check's behavior (which aborts rather than
-    # treating a null as zero) instead of silently summing over the
-    # non-null items. Without this, a missing item.fixed_rent would both
-    # (a) get flagged as MISSING_DATA on the item, and (b) make a perfectly
-    # correct invoice.subtotal look wrong by the amount of that missing
-    # item — or worse, mask a genuinely wrong subtotal that happens to
-    # equal the partial sum.
+   
     any_fixed_rent_missing = any(i.fixed_rent is None for i in items)
     any_sgst_missing = any(i.sgst is None for i in items)
     any_cgst_missing = any(i.cgst is None for i in items)

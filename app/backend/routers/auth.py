@@ -19,7 +19,6 @@ from .. import schemas
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-# Shared limiter instance; registered on the app + exception handler in main.py
 limiter = Limiter(key_func=get_remote_address)
 
 
@@ -40,7 +39,7 @@ def register(request: Request, payload: schemas.UserIn, db: Session = Depends(ge
         username=payload.username,
         email=payload.email,
         hashed_password=hash_password(payload.password),
-        role=UserRole.USER,  # new users are always USER by default
+        role=UserRole.USER, 
     )
     db.add(user)
     db.commit()
@@ -60,9 +59,7 @@ def login(
         select(User).where(User.email == form_data.username)
     ).scalar_one_or_none()
 
-    # verify_password_or_dummy always performs a bcrypt comparison, even when
-    # `user` is None, so this branch takes a similar amount of time whether
-    # or not the email exists (mitigates user-enumeration via timing).
+    
     password_ok = verify_password_or_dummy(
         form_data.password, user.hashed_password if user else None
     )
@@ -79,10 +76,7 @@ def login(
             detail="User account is inactive"
         )
 
-    # NOTE: role is intentionally NOT embedded in the token. Authorization
-    # (require_admin / require_user) always re-checks the role from the
-    # database on every request, so a stale/forged role claim can't grant
-    # access. Keeping it out of the token avoids anyone assuming otherwise.
+  
     token = create_access_token(data={"user_id": user.id})
     response.set_cookie(
         key="jwt",
@@ -102,14 +96,13 @@ def forgot_password(request: Request, payload: schemas.ForgotPasswordIn, db: Ses
         select(User).where(User.email == payload.email)
     ).scalar_one_or_none()
 
-    # Always return the same generic message whether or not the email
-    # exists, so this endpoint can't be used to enumerate accounts.
+   
     generic_response = {"message": "If that email is registered, a reset link has been sent."}
 
     if not user or not user.is_active:
         return generic_response
 
-    # Invalidate any previous unused tokens for this user
+   
     db.execute(
         select(PasswordResetToken)
         .where(PasswordResetToken.user_id == user.id, PasswordResetToken.used_at.is_(None))
@@ -132,7 +125,7 @@ def forgot_password(request: Request, payload: schemas.ForgotPasswordIn, db: Ses
     db.add(reset_entry)
     db.commit()
 
-    # TODO: send this via real email (SES/SendGrid/SMTP) instead of logging.
+    
     reset_link = f"{settings.FRONTEND_URL}/reset-password?token={raw_token}"
     
     send_password_reset_email(user.email, reset_link)
