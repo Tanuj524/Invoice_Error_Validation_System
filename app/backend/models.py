@@ -68,8 +68,7 @@ class PasswordResetToken(Base):
         server_default=text("now()")
     )
 
-    user = relationship("User")
-
+    user = relationship("User", back_populates="reset_tokens")
 
 class Invoice(Base):
     __tablename__ = "invoices"
@@ -218,4 +217,4 @@ class User(Base):
         server_default=text("now()")
     )
     invoices = relationship("Invoice", back_populates="creator")
-    reset_tokens = relationship("PasswordResetToken", cascade="all, delete-orphan")
+    reset_tokens = relationship("PasswordResetToken", back_populates="user", cascade="all, delete-orphan")

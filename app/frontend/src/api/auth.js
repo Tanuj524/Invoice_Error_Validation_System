@@ -1,7 +1,7 @@
-import axiosInstance from "./client.js";
+import apiClient from "./client.js";
 
 export async function registerUser(username, email, password) {
-  const response = await axiosInstance.post("/auth/register", {
+  const response = await apiClient.post("/auth/register", {
     username,
     email,
     password,
@@ -23,4 +23,17 @@ export async function loginUser(email, password) {
 export async function getMe() {
   const response = await apiClient.get("/auth/me");
   return response.data; // UserOut
+}
+
+export async function forgotPassword(email) {
+  const response = await apiClient.post("/auth/forgot-password", { email });
+  return response.data;
+}
+
+export async function resetPassword(token, newPassword) {
+  const response = await apiClient.post("/auth/reset-password", {
+    token,
+    new_password: newPassword,
+  });
+  return response.data;
 }

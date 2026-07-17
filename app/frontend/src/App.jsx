@@ -1,7 +1,12 @@
+import { useEffect } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
-import {Toaster} from "react-hot-toast";
+import { Toaster } from "react-hot-toast";
 import Register from "./pages/Register";
-
+import Login from "./pages/Login";
+import useAuthStore from "./store/authStore";
+import ProtectedRoute from "./components/ProtectedRoute";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 
 function Placeholder({ label }) {
   return (
@@ -11,25 +16,29 @@ function Placeholder({ label }) {
   );
 }
 
-
 function App() {
+  const checkAuth = useAuthStore((state) => state.checkAuth);
+
+  useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
+
   return (
     <>
       <Toaster position="top-center" />
       <Routes>
         <Route path="/register" element={<Register />} />
-        <Route path="/login" element={<Placeholder label="Login" />} />
-        <Route path="/forgot-password" element={<Placeholder label="Forgot password" />} />
-        <Route path="/reset-password" element={<Placeholder label="Reset password" />} />
+        <Route path="/login" element={<Login />} />
 
-        {/* default: send root to register for now, until we have a dashboard */}
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/dashboard" element={<ProtectedRoute><Placeholder label="Dashboard" /></ProtectedRoute>} />
+
         <Route path="/" element={<Navigate to="/register" replace />} />
-
-        {/* catch-all */}
         <Route path="*" element={<Navigate to="/register" replace />} />
       </Routes>
     </>
   );
 }
-  
-export default App
+
+export default App;
