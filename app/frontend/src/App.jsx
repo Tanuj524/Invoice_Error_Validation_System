@@ -7,6 +7,8 @@ import useAuthStore from "./store/authStore";
 import ProtectedRoute from "./components/ProtectedRoute";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
+import Dashboard from "./pages/Dashboard";
+import InvoiceDetail from "./pages/InvoiceDetail";
 
 function Placeholder({ label }) {
   return (
@@ -32,7 +34,8 @@ function App() {
 
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
-        <Route path="/dashboard" element={<ProtectedRoute><Placeholder label="Dashboard" /></ProtectedRoute>} />
+        <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        <Route path="/invoices/:id" element={<ProtectedRoute><InvoiceDetail /></ProtectedRoute>} />
 
         <Route path="/" element={<Navigate to="/register" replace />} />
         <Route path="*" element={<Navigate to="/register" replace />} />

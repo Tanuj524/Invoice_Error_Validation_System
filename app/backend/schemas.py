@@ -69,6 +69,7 @@ class InvoiceOut(BaseModel):
     invoice_number: str
     customer_name: Optional[str] = None
     source_format: SourceFormat
+    source_file_path: Optional[str] = None
     bill_date: Optional[date] = None
     bill_period_start: Optional[date] = None
     bill_period_end: Optional[date] = None

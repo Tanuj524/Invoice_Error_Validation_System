@@ -28,6 +28,11 @@ def _get_owned_invoice(invoice_id: int, db: Session, current_user: User) -> Invo
     return invoice
 
 
+
+@router.get("/{invoice_id}", response_model=schemas.InvoiceDetailOut)
+def get_invoice(invoice_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_user)):
+    return _get_owned_invoice(invoice_id, db, current_user)
+
 @router.post("/upload", response_model=schemas.InvoiceDetailOut, status_code=201)
 def create_invoice(payload: schemas.InvoiceIn, db: Session = Depends(get_db), current_user: User = Depends(require_user)):
     existing = db.execute(
