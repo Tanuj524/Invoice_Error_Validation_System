@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import toast from "react-hot-toast";
 import { getInvoice } from "../api/invoices";
 import useInvoiceStore from "../store/invoiceStore";
+import Navbar from "../components/Navbar";
 
 
 const STATUS_BADGE = {
@@ -60,7 +61,9 @@ function InvoiceDetail() {
   const errors = invoice.errors;
 
   return (
-    <div className="min-h-screen bg-gray-950 px-6 py-8">
+    <div className="min-h-screen bg-gray-950">
+      <Navbar />
+          <div className="px-6 py-8">
       <div className="max-w-7xl mx-auto">
         <Link to="/dashboard" className="text-sm text-blue-400 hover:underline">
           ← Back to invoices
@@ -152,6 +155,7 @@ function InvoiceDetail() {
             </tbody>
           </table>
         </div>
+      </div>
       </div>
     </div>
   );

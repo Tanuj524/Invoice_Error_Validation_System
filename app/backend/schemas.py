@@ -3,7 +3,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
-
+from pydantic import computed_field
 from .models import SourceFormat, InvoiceStatus, ErrorLevel, ErrorCategory, UserRole
 
 class InvoiceItemIn(BaseModel):
@@ -62,6 +62,10 @@ class InvoiceItemOut(BaseModel):
     total: Optional[Decimal] = None
 
 
+class CreatorOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    username: str
+
 class InvoiceOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -80,7 +84,12 @@ class InvoiceOut(BaseModel):
     status: InvoiceStatus
     created_by: Optional[int] = None
     created_at: datetime
+    creator: Optional[CreatorOut] = None
 
+    @computed_field
+    @property
+    def created_by_username(self) -> Optional[str]:
+        return self.creator.username if self.creator else None
 
 class InvoiceDetailOut(InvoiceOut):
     items: list[InvoiceItemOut] = []

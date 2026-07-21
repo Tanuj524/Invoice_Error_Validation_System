@@ -9,6 +9,8 @@ import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Dashboard";
 import InvoiceDetail from "./pages/InvoiceDetail";
+import AdminPanel from "./pages/AdminPanel";
+import AdminRoute from "./components/AdminRoute";
 
 function Placeholder({ label }) {
   return (
@@ -36,7 +38,7 @@ function App() {
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
         <Route path="/invoices/:id" element={<ProtectedRoute><InvoiceDetail /></ProtectedRoute>} />
-
+        <Route path="/admin" element={<AdminRoute><AdminPanel /></AdminRoute>} />
         <Route path="/" element={<Navigate to="/register" replace />} />
         <Route path="*" element={<Navigate to="/register" replace />} />
       </Routes>

@@ -1,5 +1,13 @@
 import { create } from "zustand";
-import { registerUser, loginUser, getMe, forgotPassword as forgotPasswordApi, resetPassword as resetPasswordApi } from "../api/auth";
+import {
+  registerUser,
+  loginUser,
+  getMe,
+  forgotPassword as forgotPasswordApi,
+  resetPassword as resetPasswordApi,
+  logoutUser,
+} from "../api/auth";
+
 
 const useAuthStore = create((set) => ({
   user: null,
@@ -61,6 +69,17 @@ resetPassword: async (token, newPassword) => {
   } catch (err) {
     set({ isLoading: false });
     return { success: false, error: extractError(err) };
+  }
+},
+logout: async () => {
+  try {
+    await logoutUser();
+  } catch (err) {
+    // even if the request fails (e.g. network blip), clear local state anyway —
+    // staying "logged in" client-side when the server call failed is worse than
+    // just forcing a fresh login
+  } finally {
+    set({ user: null, isAuthenticated: false });
   }
 },
 }));

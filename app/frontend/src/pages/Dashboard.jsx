@@ -3,7 +3,8 @@ import { listInvoices } from "../api/invoices";
 import toast from "react-hot-toast";
 import {useNavigate} from "react-router-dom";
 import useInvoiceStore from "../store/invoiceStore";
-
+import Navbar from "../components/Navbar";
+import useAuthStore from "../store/authStore";
 
 const STATUS_BADGE = {
   VALID: { label: "Passed", bg: "bg-green-900/30", text: "text-green-400" },
@@ -28,6 +29,8 @@ function formatDate(value) {
 
 
 function Dashboard() {
+  const currentUser = useAuthStore((state) => state.user);
+  const isAdmin = currentUser?.role === "ADMIN";
   const navigate = useNavigate();
   const invoices = useInvoiceStore((state) => state.invoices);
   const isLoading = useInvoiceStore((state) => state.isLoading);
@@ -55,7 +58,9 @@ function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 px-6 py-8">
+    <div className="min-h-screen bg-gray-950">
+      <Navbar />
+          <div className="px-6 py-8">
   <div className="max-w-7xl mx-auto">
     <div className="flex items-center justify-between mb-6">
       <div>
@@ -78,6 +83,7 @@ function Dashboard() {
             <th className="font-medium px-4 py-2">Invoice</th>
             <th className="font-medium px-4 py-2">Customer</th>
             <th className="font-medium px-4 py-2">Bill date</th>
+            {isAdmin && <th className="font-medium px-4 py-2">Created by</th>}
             <th className="font-medium px-4 py-2 text-right">Grand total</th>
             <th className="font-medium px-4 py-2">Status</th>
           </tr>
@@ -94,6 +100,9 @@ function Dashboard() {
                 <td className="px-4 py-2 text-gray-100">{inv.invoice_number}</td>
                 <td className="px-4 py-2 text-gray-300">{inv.customer_name ?? "—"}</td>
                 <td className="px-4 py-2 text-gray-300">{formatDate(inv.bill_date)}</td>
+                {isAdmin && (
+                  <td className="px-4 py-2 text-gray-300">{inv.created_by_username ?? "—"}</td>
+                )}
                 <td className="px-4 py-2 text-right text-gray-300">{formatCurrency(inv.grand_total)}</td>
                 <td className="px-4 py-2">
                   <span className={`inline-block text-xs px-2.5 py-1 rounded-md ${badge.bg} ${badge.text}`}>
@@ -106,6 +115,7 @@ function Dashboard() {
         </tbody>
       </table>
     </div>
+  </div>
   </div>
 </div>
   );
