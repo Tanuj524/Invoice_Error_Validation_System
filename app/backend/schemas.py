@@ -17,7 +17,7 @@ class InvoiceItemIn(BaseModel):
 
 
 class InvoiceIn(BaseModel):
-    invoice_number: str
+    invoice_number: Optional[str] = None
     customer_name: Optional[str] = None
     source_format: SourceFormat
     source_file_path: Optional[str] = None
@@ -70,9 +70,9 @@ class InvoiceOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    invoice_number: str
+    invoice_number: Optional[str] = None
     customer_name: Optional[str] = None
-    source_format: SourceFormat
+    source_format: SourceFormat = None
     source_file_path: Optional[str] = None
     bill_date: Optional[date] = None
     bill_period_start: Optional[date] = None
@@ -154,7 +154,7 @@ class BulkInvoiceIn(BaseModel):
 
 class BulkInvoiceResultItem(BaseModel):
     index: int                     
-    invoice_number: str
+    invoice_number: Optional[str] = None
     success: bool
     invoice_id: Optional[int] = None
     status: Optional[InvoiceStatus] = None

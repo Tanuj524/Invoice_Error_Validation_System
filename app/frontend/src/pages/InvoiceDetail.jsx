@@ -71,7 +71,7 @@ function InvoiceDetail() {
 
         <div className="mt-4 mb-6 flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-medium text-gray-100">{invoice.invoice_number}</h1>
+            <h1 className="text-xl font-medium text-gray-100">{invoice.invoice_number ?? "No invoice number"}</h1>
             <p className="text-sm text-gray-400">{invoice.customer_name ?? "No customer name"}</p>
           </div>
           <span className={`text-xs px-2.5 py-1 rounded-md ${badge.bg} ${badge.text}`}>

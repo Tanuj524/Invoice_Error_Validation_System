@@ -97,7 +97,7 @@ function Dashboard() {
                 className="border-t border-gray-800 hover:bg-gray-900 cursor-pointer"
                 onClick={() => navigate(`/invoices/${inv.id}`)}
               >
-                <td className="px-4 py-2 text-gray-100">{inv.invoice_number}</td>
+                <td className="px-4 py-2 text-gray-100">{inv.invoice_number ?? "No invoice number"}</td>
                 <td className="px-4 py-2 text-gray-300">{inv.customer_name ?? "—"}</td>
                 <td className="px-4 py-2 text-gray-300">{formatDate(inv.bill_date)}</td>
                 {isAdmin && (

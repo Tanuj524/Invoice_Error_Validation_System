@@ -217,9 +217,9 @@ def _validate_invoice_required_fields(invoice: Invoice) -> list[ValidationError]
 
 
 def _validate_invoice_optional_field_nulls(invoice: Invoice) -> list[ValidationError]:
-   
+
     errors = []
-    for field_name in ("customer_name", "source_file_path"):
+    for field_name in ("customer_name", "source_file_path", "invoice_number"):
         if getattr(invoice, field_name) is None:
             errors.append(_make_error(
                 invoice=invoice,

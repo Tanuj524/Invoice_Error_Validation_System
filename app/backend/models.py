@@ -75,11 +75,11 @@ class Invoice(Base):
 
     id = Column(Integer, primary_key=True, index=True)
 
-    invoice_number = Column(String(100), nullable=False, unique=True, index=True)
+    invoice_number = Column(String(100), index=True)
     customer_name = Column(String(255))
 
 
-    source_format = Column(SAEnum(SourceFormat, name="source_format"), nullable=False)
+    source_format = Column(SAEnum(SourceFormat, name="source_format", nullable=False))
     source_file_path = Column(String(500)) 
 
     bill_date = Column(Date)

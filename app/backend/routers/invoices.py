@@ -35,11 +35,6 @@ def get_invoice(invoice_id: int, db: Session = Depends(get_db), current_user: Us
 
 @router.post("/upload", response_model=schemas.InvoiceDetailOut, status_code=201)
 def create_invoice(payload: schemas.InvoiceIn, db: Session = Depends(get_db), current_user: User = Depends(require_user)):
-    existing = db.execute(
-        select(Invoice).where(Invoice.invoice_number == payload.invoice_number)
-    ).scalar_one_or_none()
-    if existing:
-        raise HTTPException(409, f"Invoice {payload.invoice_number} already exists")
 
     invoice = Invoice(
         invoice_number=payload.invoice_number,
@@ -66,11 +61,7 @@ def create_invoice(payload: schemas.InvoiceIn, db: Session = Depends(get_db), cu
     invoice.errors = errors
 
     db.add(invoice)
-    try:
-        db.commit()
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(409, f"Invoice {payload.invoice_number} already exists")
+    db.commit()
 
     db.refresh(invoice)
     return invoice
@@ -85,7 +76,7 @@ def list_invoices(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_user)
 ):
-    query = select(Invoice)
+    query = select(Invoice).order_by(Invoice.created_at.desc())
 
     if current_user.role == UserRole.ADMIN:
         pass
@@ -125,7 +116,7 @@ def delete_invoice(invoice_id: int, db: Session = Depends(get_db), current_user:
 def get_invoice_by_number(invoice_number: str, db: Session = Depends(get_db), current_user: User = Depends(require_user)):
     invoice = db.execute(
         select(Invoice).where(Invoice.invoice_number == invoice_number)
-    ).scalar_one_or_none()
+    ).scalars().all()
     if not invoice:
         raise HTTPException(404, f"Invoice {invoice_number} not found")
     if current_user.role != UserRole.ADMIN and invoice.created_by != current_user.id:
@@ -146,11 +137,6 @@ def create_invoices_bulk(
        
         try:
             with db.begin_nested():
-                existing = db.execute(
-                    select(Invoice).where(Invoice.invoice_number == item.invoice_number)
-                ).scalar_one_or_none()
-                if existing:
-                    raise ValueError(f"Invoice {item.invoice_number} already exists")
 
                 invoice = Invoice(
                     invoice_number=item.invoice_number,
@@ -187,17 +173,19 @@ def create_invoices_bulk(
             ))
 
         except IntegrityError as e:
-            msg = f"Invoice {item.invoice_number} already exists" if "invoice_number" in str(e.orig) else str(e.orig)
+            db.rollback()
             results.append(schemas.BulkInvoiceResultItem(
                 index=index, invoice_number=item.invoice_number,
-                success=False, error=msg,
+                success=False, error=str(e.orig),
         ))
         except ValueError as e:
+            db.rollback()
             results.append(schemas.BulkInvoiceResultItem(
                 index=index, invoice_number=item.invoice_number,
                 success=False, error=str(e),
         ))
         except Exception as e:
+            db.rollback()
             results.append(schemas.BulkInvoiceResultItem(
             index=index, invoice_number=item.invoice_number,
             success=False, error=f"Unexpected error: {e}",
